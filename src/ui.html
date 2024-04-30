@@ -1,0 +1,141 @@
+<style>
+    .palette-color-line {}
+    .arrange {
+        margin-left: 2em;
+        display: inline-block;
+    }
+</style>
+
+<div>
+    <fieldset>
+        <legend>Set Initial Palette</legend>
+        <div id="target">
+            <label><input type="radio" name="targetL" value="1">to White</label>
+            <label><input type="radio" name="targetL" value="0">to Black</label>
+            <label><input type="radio" name="targetL" value="null" checked>Auto</label>
+        </div>
+        <div id="palette"></div>
+        <button onclick="addColor()">&plus; Add Color</button>
+    </fieldset>
+</div>
+
+<template>
+    <div class="palette-color-line">
+        <label>
+            Color <span>#</span>:
+            <input type="color" value="#00AAFF">
+        </label>
+        <button class="remove">&times;</button>
+        <div class="arrange">
+            <button class="up">↑</button>
+            <button class="down">↓</button>
+        </div>
+    </div>
+</template>
+
+
+<p>Gradient Length: <input id="count" type="number" value="5" style="width: 40%"></p>
+<label><input type="checkbox" id="use-rgb">Use RGB space</label><br>
+<label><input type="checkbox" id="show-hex">Show HEX</label><br>
+<button id="create" onclick="create()">Create</button>
+<button id="cancel" onclick="cancel()">Cancel</button>
+<script>
+    let palette = []
+    const paletteElement = document.getElementById('palette')
+    const template = document.querySelector('template')
+    const target = document.getElementById('target')
+
+    function removeColor(index) {
+        palette.splice(index, 1)
+        redraw()
+    }
+
+    function addColor() {
+        palette.push(palette.at(-1) || '#FFFFFF')
+        redraw()
+    }
+
+    function updateColor(index, {target: {value: newColor}}) {
+        palette[index] = newColor
+    }
+
+    function moveColorUp(index) {
+        palette.splice(index - 1, 0, ...palette.splice(index, 1))
+        redraw()
+    }
+
+    function moveColorDown(index) {
+        palette.splice(index + 1, 0, ...palette.splice(index, 1))
+        redraw()
+    }
+
+    function redraw() {
+        paletteElement.innerHTML = ''
+        const isSingleColor = palette.length === 1
+
+        palette.forEach((color, index) => {
+            const clone = template.content.cloneNode(true)
+
+            clone.querySelector('span').textContent = String(index + 1)
+
+            const input = clone.querySelector('input')
+            input.value = color
+            input.onchange = updateColor.bind(null, index)
+
+            const makeButton = (selector, cb, removeButton = false) => {
+                const button = clone.querySelector(selector)
+                if (!removeButton && !isSingleColor) button.addEventListener('click', cb.bind(null, index))
+                else button.remove()
+                return button
+            }
+
+            makeButton('button.remove', removeColor)
+            makeButton('button.up', moveColorUp, index === 0)
+            const downButton = makeButton('button.down', moveColorDown, index === palette.length - 1)
+            if (index === 0) {
+                downButton.style.marginLeft = '2em'
+            }
+
+            paletteElement.appendChild(clone)
+        })
+
+        target.style.display = palette.length > 1 ? 'none' : 'block'
+    }
+
+    function create() {
+        const countInput = document.getElementById('count')
+        const count = parseInt(countInput.value, 10)
+        const targetLElement = document.querySelector('input[name="targetL"]:checked')
+        const targetL = JSON.parse(targetLElement.value)
+        const showHex = document.getElementById('show-hex').checked
+        const useRGB = document.getElementById('use-rgb').checked
+
+        const pluginMessage = {
+            count,
+            palette,
+            targetL,
+            showHex,
+            useRGB,
+            type: 'create-gradient'
+        }
+        parent.postMessage({pluginMessage}, '*')
+    }
+
+    function cancel() {
+        parent.postMessage({pluginMessage: {type: 'cancel'}}, '*')
+    }
+
+    onmessage = (event) => {
+        palette = event.data.pluginMessage
+        if (!palette.length) palette.push('#00AAFF')
+        redraw()
+    }
+
+    window.addEventListener('keyup', e => {
+        if (e.key === 'Escape') {
+            parent.postMessage({pluginMessage: {type: 'cancel'}}, '*')
+        }
+    })
+
+    window.focus()
+</script>
